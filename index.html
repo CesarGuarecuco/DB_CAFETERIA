@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Inventario - Cafetería SGIC</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .modal { display: none; } .modal.active { display: flex; }
+        .modal-content { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .table-responsive { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .stat-card { background-color: white; padding: 1.5rem; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); }
+        .stat-title { font-size: 0.875rem; color: #4A5568; font-weight: 500; }
+        .stat-value { font-size: 1.875rem; font-weight: 700; color: #2D3748; }
+        .stock-alert-indicator {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 1.5rem; /* Ajusta según sea necesario */
+            height: 1.5rem; /* Ajusta según sea necesario */
+            padding: 0 0.4rem;
+            border-radius: 50%;
+            background-color: red;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: bold;
+            margin-left: 0.5rem;
+            vertical-align: middle; /* Para alinear con el texto del título */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <nav class="bg-gradient-to-r from-amber-500 to-orange-600 text-white p-4 shadow-lg sticky top-0 z-40">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold flex items-center">
+                Cafetería SGIC
+                <span id="indicadorAlertaStockGlobal" class="stock-alert-indicator hidden">0</span>
+            </h1>
+            <div>
+                <button id="btnNavIngredientes" class="px-3 py-2 rounded-md hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300">Ingredientes</button>
+                <button id="btnNavProductos" class="px-3 py-2 rounded-md hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300">Productos</button>
+                <button id="btnNavMovimientos" class="px-3 py-2 rounded-md hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300">Movimientos</button>
+                <button id="btnNavReportes" class="px-3 py-2 rounded-md hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300">Reportes</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4 md:p-8">
+        <section id="seccionIngredientes" class="space-y-6">
+             <div class="flex justify-between items-center"><h2 class="text-3xl font-semibold text-gray-700">Gestión de Ingredientes</h2><button id="btnAbrirModalNuevoIngrediente" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow transition duration-150 ease-in-out">+ Nuevo Ingrediente</button></div><div class="bg-white shadow-xl rounded-lg overflow-hidden table-responsive"><table class="min-w-full leading-normal"><thead class="bg-gray-800 text-white"><tr><th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">ID</th><th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">Nombre</th><th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">Unidad</th><th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">Stock Actual</th><th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">Stock Mínimo</th><th class="px-5 py-3 border-b-2 border-gray-200 text-left text-xs font-semibold uppercase tracking-wider">Acciones</th></tr></thead><tbody id="tablaIngredientesBody"></tbody></table></div>
+        </section>
+        <section id="seccionProductos" class="hidden space-y-6">
+            <div class="flex justify-between items-center"><h2 class="text-3xl font-semibold text-gray-700">Gestión de Productos</h2><button id="btnAbrirModalNuevoProducto" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow transition duration-150 ease-in-out">+ Nuevo Producto</button></div><div class="bg-white shadow-xl rounded-lg p-6"><div id="listaProductos" class="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div></div>
+        </section>
+        <section id="seccionMovimientos" class="hidden space-y-6">
+            <h2 class="text-3xl font-semibold text-gray-700">Registro de Movimientos de Inventario</h2><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="bg-white p-6 rounded-lg shadow-lg"><h3 class="text-xl font-semibold mb-4">Registrar Entrada</h3><form id="formRegistrarEntrada"><div class="mb-4"><label for="entradaIngredienteId" class="block text-sm font-medium text-gray-700 mb-1">Ingrediente:</label><select id="entradaIngredienteId" name="id_ingrediente" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500 sm:text-sm"></select></div><div class="mb-4"><label for="entradaCantidad" class="block text-sm font-medium text-gray-700 mb-1">Cantidad:</label><input type="number" step="0.001" id="entradaCantidad" name="cantidad" required class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500 sm:text-sm"></div><button type="submit" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow">Registrar Entrada</button></form></div><div class="bg-white p-6 rounded-lg shadow-lg"><h3 class="text-xl font-semibold mb-4">Registrar Venta</h3><form id="formRegistrarVenta"><div class="mb-4"><label for="ventaProductoId" class="block text-sm font-medium text-gray-700 mb-1">Producto:</label><select id="ventaProductoId" name="id_producto" class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500 sm:text-sm"></select></div><div class="mb-4"><label for="ventaCantidad" class="block text-sm font-medium text-gray-700 mb-1">Cantidad Vendida:</label><input type="number" id="ventaCantidad" name="cantidad_vendida" value="1" min="1" required class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500 sm:text-sm"></div><button type="submit" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow">Registrar Venta</button></form></div></div>
+        </section>
+
+        <section id="seccionReportes" class="hidden space-y-8">
+            <h2 class="text-3xl font-semibold text-gray-700">Reportes de Inventario y Ventas</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="stat-card">
+                    <h3 class="stat-title">Promedio General de Ventas Diarias</h3>
+                    <p id="statPromedioVentasDiarias" class="stat-value">$0.00</p>
+                    <button id="btnActualizarPromedioDiario" class="mt-2 text-xs text-indigo-600 hover:text-indigo-800">Actualizar</button>
+                </div>
+                <div class="stat-card">
+                    <h3 class="stat-title">Promedio General de Ventas Mensuales</h3>
+                    <p id="statPromedioVentasMensuales" class="stat-value">$0.00</p>
+                    <button id="btnActualizarPromedioMensual" class="mt-2 text-xs text-indigo-600 hover:text-indigo-800">Actualizar</button>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <div class="flex justify-between items-center mb-4"><h3 class="text-xl font-semibold">Reporte de Existencias de Ingredientes</h3><button id="btnActualizarReporteExistencias" class="bg-cyan-500 hover:bg-cyan-600 text-white font-semibold py-2 px-4 rounded-lg text-sm">Actualizar</button></div>
+                <div id="tablaReporteExistenciasContainer" class="table-responsive">
+                    <table class="min-w-full leading-normal"><thead class="bg-gray-200 text-gray-700"><tr><th class="px-4 py-2 border text-left text-xs font-semibold uppercase">ID</th><th class="px-4 py-2 border text-left text-xs font-semibold uppercase">Nombre Ingrediente</th><th class="px-4 py-2 border text-left text-xs font-semibold uppercase">Unidad</th><th class="px-4 py-2 border text-right text-xs font-semibold uppercase">Stock Actual</th><th class="px-4 py-2 border text-right text-xs font-semibold uppercase">Stock Mínimo</th><th class="px-4 py-2 border text-center text-xs font-semibold uppercase">Estado</th></tr></thead><tbody id="tablaReporteExistenciasBody"></tbody></table>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <h3 class="text-xl font-semibold mb-4">Historial de Movimientos de Inventario</h3>
+                <form id="formFiltroMovimientos" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 items-end">
+                    <div><label for="filtroFechaInicio" class="block text-sm font-medium text-gray-700">Fecha Inicio:</label><input type="date" id="filtroFechaInicio" class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:ring-amber-500 focus:border-amber-500"></div>
+                    <div><label for="filtroFechaFin" class="block text-sm font-medium text-gray-700">Fecha Fin:</label><input type="date" id="filtroFechaFin" class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:ring-amber-500 focus:border-amber-500"></div>
+                    <button type="submit" class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg text-sm h-10">Filtrar Movimientos</button>
+                </form>
+                <div id="tablaHistorialMovimientosContainer" class="table-responsive">
+                    <table class="min-w-full leading-normal"><thead class="bg-gray-200 text-gray-700"><tr><th class="px-4 py-2 border text-left text-xs font-semibold uppercase">ID Mov.</th><th class="px-4 py-2 border text-left text-xs font-semibold uppercase">Fecha</th><th class="px-4 py-2 border text-left text-xs font-semibold uppercase">Tipo</th><th class="px-4 py-2 border text-left text-xs font-semibold uppercase">Ingrediente</th><th class="px-4 py-2 border text-right text-xs font-semibold uppercase">Cantidad</th><th class="px-4 py-2 border text-center text-xs font-semibold uppercase">ID Venta</th><th class="px-4 py-2 border text-left text-xs font-semibold uppercase">Prod. Venta</th><th class="px-4 py-2 border text-left text-xs font-semibold uppercase">Observación</th></tr></thead><tbody id="tablaHistorialMovimientosBody"></tbody></table>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <div class="flex justify-between items-center mb-4"><h3 class="text-xl font-semibold">Productos Más Vendidos (Top 10)</h3><button id="btnActualizarProductosMasVendidos" class="bg-pink-500 hover:bg-pink-600 text-white font-semibold py-2 px-4 rounded-lg text-sm">Actualizar</button></div>
+                    <div id="tablaProductosMasVendidosContainer" class="table-responsive">
+                        <table class="min-w-full leading-normal"><thead class="bg-gray-200 text-gray-700"><tr><th class="px-4 py-2 border text-left text-xs font-semibold uppercase">ID</th><th class="px-4 py-2 border text-left text-xs font-semibold uppercase">Producto</th><th class="px-4 py-2 border text-right text-xs font-semibold uppercase">Unidades Vendidas</th><th class="px-4 py-2 border text-right text-xs font-semibold uppercase">Monto Total Ventas</th></tr></thead><tbody id="tablaProductosMasVendidosBody"></tbody></table>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                     <div class="flex justify-between items-center mb-4"><h3 class="text-xl font-semibold">Productos Menos Vendidos (Top 10)</h3><button id="btnActualizarProductosMenosVendidos" class="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg text-sm">Actualizar</button></div>
+                    <div id="tablaProductosMenosVendidosContainer" class="table-responsive">
+                        <table class="min-w-full leading-normal"><thead class="bg-gray-200 text-gray-700"><tr><th class="px-4 py-2 border text-left text-xs font-semibold uppercase">ID</th><th class="px-4 py-2 border text-left text-xs font-semibold uppercase">Producto</th><th class="px-4 py-2 border text-right text-xs font-semibold uppercase">Unidades Vendidas</th><th class="px-4 py-2 border text-right text-xs font-semibold uppercase">Monto Total Ventas</th></tr></thead><tbody id="tablaProductosMenosVendidosBody"></tbody></table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div id="modalIngrediente" class="modal fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full items-center justify-center z-50"><div class="modal-content bg-white p-6 md:p-8 rounded-lg shadow-xl w-full max-w-md mx-auto"><div class="flex justify-between items-center mb-4"><h3 id="modalIngredienteTitle" class="text-2xl font-semibold"></h3><button id="btnCerrarModalIngrediente" class="text-gray-700 hover:text-red-500 text-2xl">&times;</button></div><form id="formIngrediente"><input type="hidden" id="ingredienteId" name="id_ingrediente"><div class="mb-4"><label for="ingredienteNombre" class="block text-sm font-medium text-gray-700 mb-1">Nombre:</label><input type="text" id="ingredienteNombre" name="nombre" required class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:ring-amber-500 focus:border-amber-500 sm:text-sm"></div><div class="mb-4"><label for="ingredienteDescripcion" class="block text-sm font-medium text-gray-700 mb-1">Descripción:</label><textarea id="ingredienteDescripcion" name="descripcion" rows="2" class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:ring-amber-500 focus:border-amber-500 sm:text-sm"></textarea></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><div><label for="ingredienteUnidad" class="block text-sm font-medium text-gray-700 mb-1">Unidad:</label><input type="text" id="ingredienteUnidad" name="unidad_medida" required class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:ring-amber-500 focus:border-amber-500 sm:text-sm"></div><div><label for="ingredienteStockActual" class="block text-sm font-medium text-gray-700 mb-1">Stock Actual:</label><input type="number" step="0.001" id="ingredienteStockActual" name="stock_actual" required class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:ring-amber-500 focus:border-amber-500 sm:text-sm" value="0"></div></div><div class="mb-6"><label for="ingredienteStockMinimo" class="block text-sm font-medium text-gray-700 mb-1">Stock Mínimo:</label><input type="number" step="0.001" id="ingredienteStockMinimo" name="stock_minimo" class="mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:ring-amber-500 focus:border-amber-500 sm:text-sm" value="0"></div><div class="flex justify-end space-x-3"><button type="button" id="btnCancelarModalIngrediente" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow">Cancelar</button><button type="submit" class="bg-amber-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg shadow">Guardar</button></div></form></div></div>
+        <div id="modalProducto" class="modal fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full items-center justify-center z-50"><div class="modal-content bg-white p-6 md:p-8 rounded-lg shadow-xl w-full max-w-lg mx-auto"><div class="flex justify-between items-center mb-4"><h3 id="modalProductoTitle" class="text-2xl font-semibold"></h3><button id="btnCerrarModalProducto" class="text-gray-700 hover:text-red-500 text-2xl">&times;</button></div><form id="formProducto"><input type="hidden" id="productoId" name="id_producto"><div class="mb-4"><label for="productoNombre" class="block text-sm font-medium">Nombre:</label><input type="text" id="productoNombre" name="nombre" required class="mt-1 block w-full py-2 px-3 border-gray-300 rounded-md shadow-sm"></div><div class="mb-4"><label for="productoDescripcion" class="block text-sm font-medium">Descripción:</label><textarea id="productoDescripcion" name="descripcion" rows="2" class="mt-1 block w-full py-2 px-3 border-gray-300 rounded-md shadow-sm"></textarea></div><div class="mb-4"><label for="productoPrecio" class="block text-sm font-medium">Precio Venta:</label><input type="number" step="0.01" id="productoPrecio" name="precio_venta" required class="mt-1 block w-full py-2 px-3 border-gray-300 rounded-md shadow-sm"></div><h4 class="text-lg font-semibold mb-2 mt-6">Receta:</h4><div id="listaIngredientesReceta" class="space-y-3 mb-4 max-h-60 overflow-y-auto p-2 border rounded-md"></div><div class="flex items-center space-x-2 mb-4"><select id="selectIngredienteParaReceta" class="flex-grow mt-1 block w-full py-2 px-3 border-gray-300 bg-white rounded-md shadow-sm"></select><input type="number" id="cantidadIngredienteReceta" placeholder="Cant." step="0.001" class="mt-1 block w-20 py-2 px-3 border-gray-300 rounded-md shadow-sm"><input type="text" id="unidadIngredienteReceta" placeholder="Unidad" readonly class="mt-1 block w-24 py-2 px-3 border-gray-300 bg-gray-100 rounded-md shadow-sm"><button type="button" id="btnAgregarIngredienteAReceta" class="bg-sky-500 hover:bg-sky-600 text-white font-semibold py-2 px-3 rounded-md text-sm">Añadir</button></div><div class="flex justify-end space-x-3 mt-8"><button type="button" id="btnCancelarModalProducto" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg shadow">Cancelar</button><button type="submit" class="bg-amber-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg shadow">Guardar</button></div></form></div></div>
+    </div>
+    <div id="notificationArea" class="fixed bottom-5 right-5 space-y-2 z-50"></div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:5000/api';
+        // Selectores DOM
+        const tablaIngredientesBody = document.getElementById('tablaIngredientesBody');
+        const modalIngrediente = document.getElementById('modalIngrediente');
+        const formIngrediente = document.getElementById('formIngrediente');
+        const btnAbrirModalNuevoIngrediente = document.getElementById('btnAbrirModalNuevoIngrediente');
+        const btnCerrarModalIngrediente = document.getElementById('btnCerrarModalIngrediente');
+        const btnCancelarModalIngrediente = document.getElementById('btnCancelarModalIngrediente');
+        const modalIngredienteTitle = document.getElementById('modalIngredienteTitle');
+        
+        const seccionIngredientes = document.getElementById('seccionIngredientes');
+        const seccionProductos = document.getElementById('seccionProductos');
+        const seccionMovimientos = document.getElementById('seccionMovimientos');
+        const seccionReportes = document.getElementById('seccionReportes');
+
+        const btnNavIngredientes = document.getElementById('btnNavIngredientes');
+        const btnNavProductos = document.getElementById('btnNavProductos');
+        const btnNavMovimientos = document.getElementById('btnNavMovimientos');
+        const btnNavReportes = document.getElementById('btnNavReportes');
+
+        const formRegistrarEntrada = document.getElementById('formRegistrarEntrada');
+        const entradaIngredienteIdSelect = document.getElementById('entradaIngredienteId');
+        const formRegistrarVenta = document.getElementById('formRegistrarVenta');
+        const ventaProductoIdSelect = document.getElementById('ventaProductoId');
+
+        const modalProducto = document.getElementById('modalProducto');
+        const formProducto = document.getElementById('formProducto');
+        const btnAbrirModalNuevoProducto = document.getElementById('btnAbrirModalNuevoProducto');
+        const btnCerrarModalProducto = document.getElementById('btnCerrarModalProducto');
+        const btnCancelarModalProducto = document.getElementById('btnCancelarModalProducto');
+        const modalProductoTitle = document.getElementById('modalProductoTitle');
+        const listaProductosDiv = document.getElementById('listaProductos');
+        const listaIngredientesRecetaDiv = document.getElementById('listaIngredientesReceta');
+        const selectIngredienteParaReceta = document.getElementById('selectIngredienteParaReceta');
+        const cantidadIngredienteRecetaInput = document.getElementById('cantidadIngredienteReceta');
+        const unidadIngredienteRecetaInput = document.getElementById('unidadIngredienteReceta');
+        const btnAgregarIngredienteAReceta = document.getElementById('btnAgregarIngredienteAReceta');
+
+        const indicadorAlertaStockGlobal = document.getElementById('indicadorAlertaStockGlobal');
+
+        // Selectores para Reportes
+        const btnActualizarReporteExistencias = document.getElementById('btnActualizarReporteExistencias');
+        const tablaReporteExistenciasBody = document.getElementById('tablaReporteExistenciasBody');
+        const formFiltroMovimientos = document.getElementById('formFiltroMovimientos');
+        const tablaHistorialMovimientosBody = document.getElementById('tablaHistorialMovimientosBody');
+        const btnActualizarProductosMasVendidos = document.getElementById('btnActualizarProductosMasVendidos');
+        const tablaProductosMasVendidosBody = document.getElementById('tablaProductosMasVendidosBody');
+        const btnActualizarProductosMenosVendidos = document.getElementById('btnActualizarProductosMenosVendidos');
+        const tablaProductosMenosVendidosBody = document.getElementById('tablaProductosMenosVendidosBody');
+        const statPromedioVentasDiarias = document.getElementById('statPromedioVentasDiarias');
+        const statPromedioVentasMensuales = document.getElementById('statPromedioVentasMensuales');
+        const btnActualizarPromedioDiario = document.getElementById('btnActualizarPromedioDiario');
+        const btnActualizarPromedioMensual = document.getElementById('btnActualizarPromedioMensual');
+
+        let editandoIngredienteId = null;
+        let editandoProductoId = null;
+        let ingredientesRecetaActual = [];
+
+        function mostrarNotificacion(mensaje, tipo = 'success') {
+            const notificationArea = document.getElementById('notificationArea');
+            const notifId = 'notif-' + Date.now();
+            const bgColor = tipo === 'success' ? 'bg-green-500' : (tipo === 'error' ? 'bg-red-500' : 'bg-blue-500');
+            const notifHtml = `<div id="${notifId}" class="${bgColor} text-white p-3 rounded-lg shadow-md animate-pulse">${mensaje}</div>`;
+            notificationArea.insertAdjacentHTML('beforeend', notifHtml);
+            setTimeout(() => {
+                const notifElement = document.getElementById(notifId);
+                if (notifElement) {
+                    notifElement.classList.remove('animate-pulse');
+                    notifElement.style.transition = 'opacity 0.5s ease-out';
+                    notifElement.style.opacity = '0';
+                    setTimeout(() => notifElement.remove(), 500);
+                }
+            }, tipo === 'error' ? 6000 : 4000);
+        }
+        
+        function generarMensajeErrorFetch(error, accion = "realizar la operación") {
+            let msg = `Error al ${accion}. Verifique el servidor.`;
+            if (error.message && error.message.toLowerCase().includes("failed to fetch")) msg += " (Fallo conexión)";
+            else if (error.message) msg += ` (Detalle: ${error.message})`;
+            return msg;
+        }
+
+        function mostrarConfirmacion(mensaje) {
+            return new Promise((resolve) => {
+                const confirmId = 'confirm-' + Date.now();
+                const confirmHtml = `
+                    <div id="${confirmId}" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 p-4">
+                        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full modal-content">
+                            <p class="text-gray-700 mb-4">${mensaje}</p>
+                            <div class="flex justify-end space-x-3">
+                                <button id="confirmBtnNo-${confirmId}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg">No</button>
+                                <button id="confirmBtnYes-${confirmId}" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg">Sí</button> 
+                            </div></div></div>`;
+                document.body.insertAdjacentHTML('beforeend', confirmHtml);
+                const modalElement = document.getElementById(confirmId);
+                document.getElementById(`confirmBtnYes-${confirmId}`).onclick = () => { modalElement.remove(); resolve(true); };
+                document.getElementById(`confirmBtnNo-${confirmId}`).onclick = () => { modalElement.remove(); resolve(false); };
+            });
+        }
+        
+        function mostrarSeccion(idS) {
+            [seccionIngredientes, seccionProductos, seccionMovimientos, seccionReportes].forEach(s => s.classList.add('hidden'));
+            document.getElementById(idS).classList.remove('hidden');
+            [btnNavIngredientes, btnNavProductos, btnNavMovimientos, btnNavReportes].forEach(b => b.classList.remove('bg-amber-700', 'font-semibold'));
+            const activeBtn = document.getElementById(`btnNav${idS.replace('seccion', '')}`);
+            if(activeBtn) activeBtn.classList.add('bg-amber-700', 'font-semibold');
+
+            if (idS === 'seccionIngredientes') cargarIngredientes();
+            if (idS === 'seccionProductos') cargarProductos();
+            if (idS === 'seccionMovimientos') { cargarIngredientesParaSelect(entradaIngredienteIdSelect, true); cargarProductosParaSelect(ventaProductoIdSelect, true); }
+            if (idS === 'seccionReportes') {
+                cargarReporteExistencias();
+                cargarRankingProductos('desc', tablaProductosMasVendidosBody);
+                cargarRankingProductos('asc', tablaProductosMenosVendidosBody);
+                cargarPromedioVentasDiarias();
+                cargarPromedioVentasMensuales();
+                tablaHistorialMovimientosBody.innerHTML = '<tr><td colspan="8" class="text-center p-4">Filtre para ver movimientos.</td></tr>';
+            }
+        }
+        btnNavIngredientes.addEventListener('click', () => mostrarSeccion('seccionIngredientes'));
+        btnNavProductos.addEventListener('click', () => mostrarSeccion('seccionProductos'));
+        btnNavMovimientos.addEventListener('click', () => mostrarSeccion('seccionMovimientos'));
+        btnNavReportes.addEventListener('click', () => mostrarSeccion('seccionReportes'));
+
+        function actualizarIndicadorAlertaStockGlobal(ingredientes) {
+            const ingredientesBajoStock = ingredientes.filter(ing => parseFloat(ing.stock_actual) < parseFloat(ing.stock_minimo));
+            if (ingredientesBajoStock.length > 0) {
+                indicadorAlertaStockGlobal.textContent = ingredientesBajoStock.length;
+                indicadorAlertaStockGlobal.classList.remove('hidden');
+            } else {
+                indicadorAlertaStockGlobal.classList.add('hidden');
+            }
+        }
+
+        // --- CRUD Ingredientes ---
+        async function cargarIngredientes() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/ingredientes`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const ingredientes = await response.json();
+                
+                actualizarIndicadorAlertaStockGlobal(ingredientes); // Actualizar indicador global
+
+                tablaIngredientesBody.innerHTML = '';
+                if (ingredientes.length === 0) {
+                    tablaIngredientesBody.innerHTML = '<tr><td colspan="6" class="text-center p-4">No hay ingredientes.</td></tr>';
+                    return;
+                }
+                ingredientes.forEach(ing => {
+                    const tr = tablaIngredientesBody.insertRow();
+                    const stockActual = parseFloat(ing.stock_actual);
+                    const stockMinimo = parseFloat(ing.stock_minimo);
+                    
+                    if (stockActual < stockMinimo) {
+                        tr.className = 'bg-red-100 hover:bg-red-200 text-red-700 font-semibold border-b border-gray-200';
+                    } else {
+                        tr.className = 'hover:bg-gray-50 border-b border-gray-200';
+                    }
+                    
+                    tr.innerHTML = `
+                        <td class="px-5 py-3 text-sm">${ing.id_ingrediente}</td>
+                        <td class="px-5 py-3 text-sm">${ing.nombre}</td>
+                        <td class="px-5 py-3 text-sm">${ing.unidad_medida}</td>
+                        <td class="px-5 py-3 text-sm text-right">${stockActual.toFixed(3)}</td>
+                        <td class="px-5 py-3 text-sm text-right">${stockMinimo.toFixed(3)}</td>
+                        <td class="px-5 py-3 text-sm whitespace-nowrap">
+                            <button onclick="abrirModalEditarIngrediente(${ing.id_ingrediente})" class="text-blue-600 hover:text-blue-900 mr-2 p-1 rounded-md hover:bg-blue-100">✏️</button>
+                            <button onclick="eliminarIngrediente(${ing.id_ingrediente})" class="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-100">🗑️</button>
+                        </td>`;
+                });
+            } catch (error) {
+                console.error('Error cargar ingredientes:', error);
+                tablaIngredientesBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-red-500">${generarMensajeErrorFetch(error, "cargar ingredientes")}</td></tr>`;
+                actualizarIndicadorAlertaStockGlobal([]); // Ocultar si hay error
+            }
+        }
+        async function cargarIngredientesParaSelect(selectElement, forceReload = false) {
+            if (!forceReload && selectElement.options.length > 1) return;
+            try {
+                const response = await fetch(`${API_BASE_URL}/ingredientes`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const ingredientes = await response.json();
+                selectElement.innerHTML = '<option value="">Seleccione un ingrediente...</option>';
+                ingredientes.forEach(ing => {
+                    const option = document.createElement('option');
+                    option.value = ing.id_ingrediente;
+                    option.textContent = `${ing.nombre} (${ing.unidad_medida})`;
+                    option.dataset.unidad = ing.unidad_medida;
+                    selectElement.appendChild(option);
+                });
+            } catch (error) { console.error('Error cargar ingredientes para select:', error); }
+        }
+        function abrirModalNuevoIngrediente() {
+            editandoIngredienteId = null;
+            formIngrediente.reset();
+            modalIngredienteTitle.textContent = 'Nuevo Ingrediente';
+            document.getElementById('ingredienteId').value = '';
+            modalIngrediente.classList.add('active');
+        }
+        async function abrirModalEditarIngrediente(id) {
+            editandoIngredienteId = id;
+            formIngrediente.reset();
+            modalIngredienteTitle.textContent = 'Editar Ingrediente';
+            try {
+                const response = await fetch(`${API_BASE_URL}/ingredientes/${id}`);
+                if (!response.ok) throw new Error('No se pudo cargar el ingrediente.');
+                const ing = await response.json();
+                document.getElementById('ingredienteId').value = ing.id_ingrediente;
+                document.getElementById('ingredienteNombre').value = ing.nombre;
+                document.getElementById('ingredienteDescripcion').value = ing.descripcion || '';
+                document.getElementById('ingredienteUnidad').value = ing.unidad_medida;
+                document.getElementById('ingredienteStockActual').value = Number(ing.stock_actual).toFixed(3);
+                document.getElementById('ingredienteStockMinimo').value = Number(ing.stock_minimo).toFixed(3);
+                modalIngrediente.classList.add('active');
+            } catch (error) { console.error('Error cargar ingrediente para editar:', error); mostrarNotificacion(generarMensajeErrorFetch(error, "cargar ingrediente"), 'error');}
+        }
+        function cerrarModalIngrediente() { modalIngrediente.classList.remove('active'); editandoIngredienteId = null; }
+        async function eliminarIngrediente(id) {
+            if (await mostrarConfirmacion(`¿Eliminar ingrediente ID ${id}?`)) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/ingredientes/${id}`, { method: 'DELETE' });
+                    const resData = await response.json();
+                    if (!response.ok) throw new Error(resData.error || `HTTP ${response.status}`);
+                    mostrarNotificacion(resData.mensaje || 'Ingrediente eliminado.', 'success');
+                    cargarIngredientes(); // Para actualizar tabla e indicador
+                } catch (error) { console.error('Error eliminar ingrediente:', error); mostrarNotificacion(generarMensajeErrorFetch(error, "eliminar ingrediente"), 'error');}
+            }
+        }
+        formIngrediente.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const formData = new FormData(formIngrediente);
+            const ingredienteData = Object.fromEntries(formData.entries());
+            ingredienteData.stock_actual = parseFloat(ingredienteData.stock_actual) || 0;
+            ingredienteData.stock_minimo = parseFloat(ingredienteData.stock_minimo) || 0;
+            const url = editandoIngredienteId ? `${API_BASE_URL}/ingredientes/${editandoIngredienteId}` : `${API_BASE_URL}/ingredientes`;
+            const method = editandoIngredienteId ? 'PUT' : 'POST';
+            try {
+                const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ingredienteData) });
+                const resData = await response.json();
+                if (!response.ok) throw new Error(resData.error || `HTTP ${response.status}`);
+                mostrarNotificacion(resData.mensaje || `Ingrediente ${editandoIngredienteId ? 'actualizado' : 'creado'}.`, 'success');
+                cerrarModalIngrediente();
+                cargarIngredientes(); // Para actualizar tabla e indicador
+            } catch (error) { console.error('Error guardar ingrediente:', error); mostrarNotificacion(generarMensajeErrorFetch(error, "guardar ingrediente"), 'error');}
+        });
+
+        // --- CRUD Productos ---
+        async function cargarProductos() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/productos`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const productos = await response.json();
+                listaProductosDiv.innerHTML = '';
+                if (productos.length === 0) { listaProductosDiv.innerHTML = '<p class="text-center col-span-full">No hay productos.</p>'; return; }
+                productos.forEach(prod => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-white p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow';
+                    let ingredientesHtml = '<ul class="text-xs list-disc list-inside mt-1 text-gray-600">';
+                    if (prod.ingredientes && prod.ingredientes.length > 0) {
+                        prod.ingredientes.forEach(item => { ingredientesHtml += `<li>${item.nombre_ingrediente || 'ID ' + item.id_ingrediente}: ${Number(item.cantidad_necesaria).toFixed(3)} ${item.unidad_medida_receta}</li>`; });
+                    } else { ingredientesHtml += '<li>Sin receta definida</li>'; }
+                    ingredientesHtml += '</ul>';
+                    card.innerHTML = `
+                        <h3 class="text-lg font-semibold text-amber-700">${prod.nombre}</h3>
+                        <p class="text-sm text-gray-500 mb-1">${prod.descripcion || 'Sin descripción'}</p>
+                        <p class="text-xl font-bold text-green-600 mb-2">$${Number(prod.precio_venta).toFixed(2)}</p>
+                        <p class="text-xs font-medium text-gray-700">Receta:</p>${ingredientesHtml}
+                        <div class="mt-3 pt-3 border-t text-right">
+                            <button onclick="abrirModalEditarProducto(${prod.id_producto})" class="text-blue-600 hover:text-blue-900 mr-2 p-1 rounded-md text-sm">Editar</button>
+                            <button onclick="eliminarProducto(${prod.id_producto})" class="text-red-600 hover:text-red-900 p-1 rounded-md text-sm">Eliminar</button>
+                        </div>`;
+                    listaProductosDiv.appendChild(card);
+                });
+            } catch (error) { console.error('Error cargar productos:', error); listaProductosDiv.innerHTML = `<p class="text-center col-span-full text-red-500">${generarMensajeErrorFetch(error, "cargar productos")}</p>`;}
+        }
+        function renderizarIngredientesReceta() {
+            listaIngredientesRecetaDiv.innerHTML = '';
+            if (ingredientesRecetaActual.length === 0) { listaIngredientesRecetaDiv.innerHTML = '<p class="text-xs text-gray-500">Sin ingredientes en receta.</p>'; return; }
+            ingredientesRecetaActual.forEach((item, index) => {
+                const opt = [...selectIngredienteParaReceta.options].find(opt => opt.value == item.id_ingrediente);
+                const nombreIng = opt ? opt.textContent.split(' (')[0] : `ID ${item.id_ingrediente}`;
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center p-2 bg-gray-50 rounded-md text-sm';
+                div.innerHTML = `<span>${nombreIng}: ${Number(item.cantidad_necesaria).toFixed(3)} ${item.unidad_medida_receta}</span><button type="button" onclick="eliminarIngredienteDeReceta(${index})" class="text-red-500 hover:text-red-700 text-xs">Quitar</button>`;
+                listaIngredientesRecetaDiv.appendChild(div);
+            });
+        }
+        selectIngredienteParaReceta.addEventListener('change', (e) => { unidadIngredienteRecetaInput.value = (e.target.options[e.target.selectedIndex]?.dataset.unidad) || ''; });
+        btnAgregarIngredienteAReceta.addEventListener('click', () => {
+            const id_ingrediente = parseInt(selectIngredienteParaReceta.value);
+            const cantidad_necesaria = parseFloat(cantidadIngredienteRecetaInput.value);
+            const unidad_medida_receta = unidadIngredienteRecetaInput.value.trim();
+            if (!id_ingrediente || isNaN(cantidad_necesaria) || cantidad_necesaria <= 0 || !unidad_medida_receta) { mostrarNotificacion('Seleccione ingrediente, cantidad válida y unidad.', 'error'); return; }
+            if (ingredientesRecetaActual.some(item => item.id_ingrediente === id_ingrediente)) { mostrarNotificacion('Ingrediente ya está en la receta.', 'error'); return; }
+            ingredientesRecetaActual.push({ id_ingrediente, cantidad_necesaria, unidad_medida_receta });
+            renderizarIngredientesReceta();
+            cantidadIngredienteRecetaInput.value = '';
+        });
+        function eliminarIngredienteDeReceta(index) { ingredientesRecetaActual.splice(index, 1); renderizarIngredientesReceta(); }
+        function abrirModalNuevoProducto() {
+            editandoProductoId = null; formProducto.reset(); ingredientesRecetaActual = []; renderizarIngredientesReceta();
+            modalProductoTitle.textContent = 'Nuevo Producto'; document.getElementById('productoId').value = '';
+            cargarIngredientesParaSelect(selectIngredienteParaReceta, true); unidadIngredienteRecetaInput.value = '';
+            modalProducto.classList.add('active');
+        }
+        async function abrirModalEditarProducto(id) {
+            editandoProductoId = id; formProducto.reset(); modalProductoTitle.textContent = 'Editar Producto';
+            try {
+                const response = await fetch(`${API_BASE_URL}/productos/${id}`);
+                if (!response.ok) throw new Error('No se pudo cargar el producto.');
+                const prod = await response.json();
+                document.getElementById('productoId').value = prod.id_producto;
+                document.getElementById('productoNombre').value = prod.nombre;
+                document.getElementById('productoDescripcion').value = prod.descripcion || '';
+                document.getElementById('productoPrecio').value = Number(prod.precio_venta).toFixed(2);
+                ingredientesRecetaActual = prod.ingredientes.map(ing => ({ id_ingrediente: ing.id_ingrediente, cantidad_necesaria: parseFloat(ing.cantidad_necesaria), unidad_medida_receta: ing.unidad_medida_receta })) || [];
+                await cargarIngredientesParaSelect(selectIngredienteParaReceta, true);
+                renderizarIngredientesReceta(); unidadIngredienteRecetaInput.value = '';
+                modalProducto.classList.add('active');
+            } catch (error) { console.error('Error cargar producto para editar:', error); mostrarNotificacion(generarMensajeErrorFetch(error, "cargar producto"), 'error'); cerrarModalProducto(); }
+        }
+        function cerrarModalProducto() { modalProducto.classList.remove('active'); editandoProductoId = null; ingredientesRecetaActual = []; }
+        async function eliminarProducto(id) {
+            if (await mostrarConfirmacion(`¿Eliminar producto ID ${id}? Se eliminará su receta.`)) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/productos/${id}`, { method: 'DELETE' });
+                    const resData = await response.json();
+                    if (!response.ok) throw new Error(resData.error || `HTTP ${response.status}`);
+                    mostrarNotificacion(resData.mensaje || 'Producto eliminado.', 'success');
+                    cargarProductos();
+                } catch (error) { console.error('Error eliminar producto:', error); mostrarNotificacion(generarMensajeErrorFetch(error, "eliminar producto"), 'error');}
+            }
+        }
+        formProducto.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const formData = new FormData(formProducto);
+            const productoData = {
+                nombre: formData.get('nombre'), descripcion: formData.get('descripcion'),
+                precio_venta: parseFloat(formData.get('precio_venta')), ingredientes: ingredientesRecetaActual
+            };
+            if (isNaN(productoData.precio_venta) || productoData.precio_venta <=0) { mostrarNotificacion('Precio de venta debe ser número positivo.', 'error'); return; }
+            const url = editandoProductoId ? `${API_BASE_URL}/productos/${editandoProductoId}` : `${API_BASE_URL}/productos`;
+            const method = editandoProductoId ? 'PUT' : 'POST';
+            try {
+                const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(productoData) });
+                const resData = await response.json();
+                if (!response.ok) throw new Error(resData.error || `HTTP ${response.status}`);
+                mostrarNotificacion(resData.mensaje || `Producto ${editandoProductoId ? 'actualizado' : 'creado'}.`, 'success');
+                cerrarModalProducto();
+                if (!seccionProductos.classList.contains('hidden')) cargarProductos();
+            } catch (error) { console.error('Error guardar producto:', error); mostrarNotificacion(generarMensajeErrorFetch(error, "guardar producto"), 'error');}
+        });
+
+        // --- Movimientos de Inventario ---
+        async function cargarProductosParaSelect(selectElement, forceReload = false) {
+            if (!forceReload && selectElement.options.length > 1) return;
+            try {
+                const response = await fetch(`${API_BASE_URL}/productos`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const productos = await response.json();
+                selectElement.innerHTML = '<option value="">Seleccione un producto...</option>';
+                productos.forEach(prod => {
+                    const option = document.createElement('option');
+                    option.value = prod.id_producto;
+                    option.textContent = `${prod.nombre} ($${Number(prod.precio_venta).toFixed(2)})`;
+                    selectElement.appendChild(option);
+                });
+            } catch (error) { console.error('Error cargar productos para select:', error); }
+        }
+        formRegistrarEntrada.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const data = { id_ingrediente: parseInt(formRegistrarEntrada.id_ingrediente.value), cantidad: parseFloat(formRegistrarEntrada.cantidad.value) };
+            if (!data.id_ingrediente || isNaN(data.cantidad) || data.cantidad <= 0) { mostrarNotificacion('Seleccione ingrediente y cantidad válida.', 'error'); return; }
+            try {
+                const response = await fetch(`${API_BASE_URL}/inventario/entrada`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+                const resultado = await response.json();
+                if (!response.ok) throw new Error(resultado.error || `HTTP ${response.status}`);
+                mostrarNotificacion(resultado.mensaje || "Entrada registrada.", 'success');
+                formRegistrarEntrada.reset();
+                cargarIngredientes(); // Actualizar siempre para el indicador global
+            } catch (error) { console.error('Error registrar entrada:', error); mostrarNotificacion(generarMensajeErrorFetch(error, "registrar entrada"), 'error');}
+        });
+        formRegistrarVenta.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const data = { id_producto: parseInt(formRegistrarVenta.id_producto.value), cantidad_vendida: parseInt(formRegistrarVenta.cantidad_vendida.value) };
+            if (!data.id_producto || isNaN(data.cantidad_vendida) || data.cantidad_vendida <= 0) { mostrarNotificacion('Seleccione producto y cantidad válida.', 'error'); return; }
+            try {
+                const response = await fetch(`${API_BASE_URL}/inventario/salida_venta_producto`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+                const resultado = await response.json();
+                if (!response.ok) throw new Error(resultado.error || `HTTP ${response.status}`);
+                mostrarNotificacion(resultado.mensaje || "Venta registrada.", 'success');
+                formRegistrarVenta.reset();
+                cargarIngredientes(); // Actualizar siempre para el indicador global
+            } catch (error) { console.error('Error registrar venta:', error); mostrarNotificacion(generarMensajeErrorFetch(error, "registrar venta"), 'error');}
+        });
+        
+        // --- Funciones de Reportes ---
+        async function cargarReporteExistencias() {
+            tablaReporteExistenciasBody.innerHTML = '<tr><td colspan="6" class="text-center p-4">Cargando...</td></tr>';
+            try {
+                const r = await fetch(`${API_BASE_URL}/reportes/existencias`);
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                tablaReporteExistenciasBody.innerHTML = '';
+                if (!data.length) { tablaReporteExistenciasBody.innerHTML = '<tr><td colspan="6" class="text-center p-4">Sin ingredientes.</td></tr>'; return; }
+                data.forEach(i => {
+                    const tr = tablaReporteExistenciasBody.insertRow();
+                    const stockActual = parseFloat(i.stock_actual);
+                    const stockMinimo = parseFloat(i.stock_minimo);
+                    tr.className = `border-b ${stockActual < stockMinimo ? 'bg-red-100' : 'hover:bg-gray-50'}`;
+                    tr.innerHTML = `<td class="px-4 py-2 border">${i.id_ingrediente}</td><td class="px-4 py-2 border">${i.nombre}</td><td class="px-4 py-2 border">${i.unidad_medida}</td><td class="px-4 py-2 border text-right">${stockActual.toFixed(3)}</td><td class="px-4 py-2 border text-right">${stockMinimo.toFixed(3)}</td><td class="px-4 py-2 border text-center font-semibold ${stockActual < stockMinimo ? 'text-red-600' : 'text-green-600'}">${i.estado_stock}</td>`;
+                });
+            } catch (e) { console.error(e); tablaReporteExistenciasBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-red-500">${generarMensajeErrorFetch(e, "existencias")}</td></tr>`; }
+        }
+        btnActualizarReporteExistencias.addEventListener('click', cargarReporteExistencias);
+
+        formFiltroMovimientos.addEventListener('submit', async (ev) => {
+            ev.preventDefault();
+            const fi = document.getElementById('filtroFechaInicio').value;
+            const ff = document.getElementById('filtroFechaFin').value;
+            let qp = [];
+            if (fi) qp.push(`fecha_inicio=${fi}`);
+            if (ff) qp.push(`fecha_fin=${ff}`);
+            const url = `${API_BASE_URL}/reportes/historial_movimientos${qp.length ? '?' + qp.join('&') : ''}`;
+            tablaHistorialMovimientosBody.innerHTML = '<tr><td colspan="8" class="text-center p-4">Cargando historial...</td></tr>';
+            try {
+                const r = await fetch(url);
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                tablaHistorialMovimientosBody.innerHTML = '';
+                if (!data.length) { tablaHistorialMovimientosBody.innerHTML = '<tr><td colspan="8" class="text-center p-4">Sin movimientos para el filtro.</td></tr>'; return; }
+                data.forEach(m => {
+                    const tr = tablaHistorialMovimientosBody.insertRow();
+                    tr.className = 'border-b hover:bg-gray-50';
+                    tr.innerHTML = `
+                        <td class="px-4 py-2 border">${m.id_movimiento}</td>
+                        <td class="px-4 py-2 border">${new Date(m.fecha_movimiento).toLocaleString('es-CL')}</td>
+                        <td class="px-4 py-2 border">${m.tipo_movimiento}</td>
+                        <td class="px-4 py-2 border">${m.nombre_ingrediente}</td>
+                        <td class="px-4 py-2 border text-right">${Number(m.cantidad).toFixed(3)} ${m.unidad_medida}</td>
+                        <td class="px-4 py-2 border text-center">${m.id_venta_fk || '-'}</td>
+                        <td class="px-4 py-2 border">${m.nombre_producto_venta || (m.id_venta_fk ? 'N/A' : '-')}</td>
+                        <td class="px-4 py-2 border text-xs">${m.observacion || '-'}</td>`;
+                });
+            } catch (e) { console.error(e); tablaHistorialMovimientosBody.innerHTML = `<tr><td colspan="8" class="text-center p-4 text-red-500">${generarMensajeErrorFetch(e, "historial")}</td></tr>`; }
+        });
+        
+        async function cargarRankingProductos(orden, tbodyElement) {
+            tbodyElement.innerHTML = '<tr><td colspan="4" class="text-center p-4">Cargando...</td></tr>';
+            try {
+                const r = await fetch(`${API_BASE_URL}/reportes/productos_ranking_ventas?orden=${orden}&limite=10`);
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                tbodyElement.innerHTML = '';
+                if (!data.length) { tbodyElement.innerHTML = `<tr><td colspan="4" class="text-center p-4">Sin datos de ventas.</td></tr>`; return; }
+                data.forEach(p => {
+                    const tr = tbodyElement.insertRow();
+                    tr.className = 'border-b hover:bg-gray-50';
+                    tr.innerHTML = `
+                        <td class="px-4 py-2 border">${p.id_producto}</td>
+                        <td class="px-4 py-2 border">${p.nombre_producto}</td>
+                        <td class="px-4 py-2 border text-right">${p.total_unidades_vendidas}</td>
+                        <td class="px-4 py-2 border text-right">$${Number(p.total_monto_ventas).toFixed(2)}</td>`;
+                });
+            } catch (e) { console.error(e); tbodyElement.innerHTML = `<tr><td colspan="4" class="text-center p-4 text-red-500">${generarMensajeErrorFetch(e, `ranking ${orden}`)}</td></tr>`; }
+        }
+        btnActualizarProductosMasVendidos.addEventListener('click', () => cargarRankingProductos('desc', tablaProductosMasVendidosBody));
+        btnActualizarProductosMenosVendidos.addEventListener('click', () => cargarRankingProductos('asc', tablaProductosMenosVendidosBody));
+        
+        async function cargarPromedioVentasDiarias() {
+            if(!statPromedioVentasDiarias) return;
+            statPromedioVentasDiarias.textContent = 'Calculando...';
+            try {
+                const r = await fetch(`${API_BASE_URL}/reportes/promedio_ventas_diarias`);
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                statPromedioVentasDiarias.textContent = `$${Number(data.promedio_general_monto_diario || 0).toFixed(2)}`;
+            } catch (e) { console.error(e); statPromedioVentasDiarias.textContent = 'Error'; mostrarNotificacion(generarMensajeErrorFetch(e, "promedio diario"), 'error'); }
+        }
+        btnActualizarPromedioDiario.addEventListener('click', cargarPromedioVentasDiarias);
+
+        async function cargarPromedioVentasMensuales() {
+             if(!statPromedioVentasMensuales) return;
+            statPromedioVentasMensuales.textContent = 'Calculando...';
+            try {
+                const r = await fetch(`${API_BASE_URL}/reportes/promedio_ventas_mensuales`);
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                statPromedioVentasMensuales.textContent = `$${Number(data.promedio_general_monto_mensual || 0).toFixed(2)}`;
+            } catch (e) { console.error(e); statPromedioVentasMensuales.textContent = 'Error'; mostrarNotificacion(generarMensajeErrorFetch(e, "promedio mensual"), 'error'); }
+        }
+        btnActualizarPromedioMensual.addEventListener('click', cargarPromedioVentasMensuales);
+
+        // --- Event Listeners para Modales ---
+        btnAbrirModalNuevoIngrediente.addEventListener('click', abrirModalNuevoIngrediente);
+        btnCerrarModalIngrediente.addEventListener('click', cerrarModalIngrediente);
+        btnCancelarModalIngrediente.addEventListener('click', cerrarModalIngrediente);
+        modalIngrediente.addEventListener('click', (event) => { if (event.target === modalIngrediente) cerrarModalIngrediente(); });
+
+        btnAbrirModalNuevoProducto.addEventListener('click', abrirModalNuevoProducto);
+        btnCerrarModalProducto.addEventListener('click', cerrarModalProducto);
+        btnCancelarModalProducto.addEventListener('click', cerrarModalProducto);
+        modalProducto.addEventListener('click', (event) => { if (event.target === modalProducto) cerrarModalProducto(); });
+
+        // --- Inicialización ---
+        document.addEventListener('DOMContentLoaded', () => {
+            mostrarSeccion('seccionIngredientes'); 
+        });
+    </script>
+</body>
+</html>
